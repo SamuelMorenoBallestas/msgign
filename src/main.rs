@@ -6,9 +6,9 @@ use std::usize;
 use std::vec;
 use console::Term;
 use console::style;
+use std::thread;
 
 use crate::connectivity::new_packet;
-use crate::connectivity::packet_types;
 use crate::connectivity::send_packet;
 mod connectivity;
 
@@ -31,7 +31,7 @@ fn main() -> std::io::Result<()>{
 
 
 fn test_connect() -> std::io::Result<()> {
-    let mut stream = TcpStream::connect("127.0.0.1:23232")?;
+    let mut stream = TcpStream::connect("192.168.68.114:23232")?;
     println!("Sending over {}.", style("data").red());
     
     let sender = "Samuel";
@@ -44,8 +44,8 @@ fn test_connect() -> std::io::Result<()> {
 
 
 fn listen() -> std::io::Result<()> {
-    let listener = TcpListener::bind("127.0.0.1:23232").unwrap();
-    println!("Listening on {}.", style("127.0.0.1:23232").red());
+    let listener = TcpListener::bind("192.168.68.114:23232").unwrap();
+    println!("Listening on {}.", style("192.168.68.114:23232").red());
 
     for conn in listener.incoming(){
         match conn  {
@@ -102,7 +102,7 @@ fn handshake(party: u8, sendfrom: &str, mut stream: TcpStream) -> std::io::Resul
             let count = &answer[1020..1024]; 
             
             match connectivity::packet_types::from(packet_type){
-                connectivity::packet_types::CONNECTION_ACCEPT => {msg_sender(stream, "Samuel".as_bytes()); println!("Connection {}!", style("ACCEPTED").green())},
+                connectivity::packet_types::CONNECTION_ACCEPT => {msg_active(stream); println!("Connection {}!", style("ACCEPTED").green())},
                 connectivity::packet_types::CONNECTION_REJECT => {println!("Connection {}!", style("REJECTED").red()); return Ok(()); },
                 _=> {println!("FUUUUUUCK")}
             }            
@@ -114,7 +114,7 @@ fn handshake(party: u8, sendfrom: &str, mut stream: TcpStream) -> std::io::Resul
             let c=  vec![1;4];
             connectivity::send_packet(&stream, new_packet(connectivity::packet_types::CONNECTION_ACCEPT, sendfrom.as_bytes().to_vec(), body, c))?;
             println!("Connection {}!", style("ESTABLISHED").green());
-            msg_reciever(stream);
+            msg_active(stream);
         }, //caller is server
 
         _ => println!("{}", style("ERROR IN HANDSHAKE").red()),
@@ -123,32 +123,35 @@ fn handshake(party: u8, sendfrom: &str, mut stream: TcpStream) -> std::io::Resul
     Ok(())
 }
 
-fn msg_sender(stream: TcpStream, sender: &[u8]){
-    loop {
-
-        let c=  vec![1;4];
+fn msg_active(stream: TcpStream){
     
+    let writestream = stream.try_clone().unwrap();
+    let mut readstream = stream;
+
+    thread::spawn(move ||{
+        loop{
+        let c=  vec![1;4];
         let term = Term::stdout();
         let choice = term.read_line().unwrap();
         let mut body = choice.as_bytes().to_vec();
         let pad = vec![0;1004-choice.len()];
         body.extend(pad);
-        let p =  new_packet(connectivity::packet_types::SIMPLE_MSG, sender.to_vec(), body, c);
-        send_packet(&stream, p);
-    }
-}
+        let p =  new_packet(connectivity::packet_types::SIMPLE_MSG, "Samuel".as_bytes().to_vec(), body, c);
+        send_packet(&writestream, p);} 
+    });
 
-
-fn msg_reciever(mut stream: TcpStream){
     loop{
-    let mut answer = vec![0;1024];
-    stream.read_exact(&mut answer);
+        let mut answer = vec![0;1024];
+        readstream.read_exact(&mut answer);
+    
+        let packet_type = answer[0];
+        let sender =  &answer[1..16];
+        let body = &answer[16..1020];
+        let count = &answer[1020..1024]; 
+    
+        let term = Term::stdout();
+        term.write_line(str::from_utf8(body).unwrap());}
 
-    let packet_type = answer[0];
-    let sender =  &answer[1..16];
-    let body = &answer[16..1020];
-    let count = &answer[1020..1024]; 
-
-    let term = Term::stdout();
-    term.write_line(str::from_utf8(body).unwrap());}
 }
+
+
