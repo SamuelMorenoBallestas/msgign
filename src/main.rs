@@ -31,7 +31,7 @@ fn main() -> std::io::Result<()>{
 
 
 fn test_connect() -> std::io::Result<()> {
-    let mut stream = TcpStream::connect("192.168.68.114:23232")?;
+    let mut stream = TcpStream::connect("127.0.0.1:23232")?;
     println!("Sending over {}.", style("data").red());
     
     let sender = "Samuel";
@@ -44,8 +44,8 @@ fn test_connect() -> std::io::Result<()> {
 
 
 fn listen() -> std::io::Result<()> {
-    let listener = TcpListener::bind("192.168.68.114:23232").unwrap();
-    println!("Listening on {}.", style("192.168.68.114:23232").red());
+    let listener = TcpListener::bind("127.0.0.1:23232").unwrap();
+    println!("Listening on {}.", style("127.0.0.1:23232").red());
 
     for conn in listener.incoming(){
         match conn  {
